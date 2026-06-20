@@ -163,7 +163,8 @@ def build_order_modal(callback_id: str, *, usage: str = "",
     # ── 분기: 공용 vs 일반 ────────────────────────────────────────────────
     if selected_usage == "공용":
         _append_public_blocks(blocks, category=category,
-                              public_name=public_name, initial=initial)
+                              public_name=public_name, company=company,
+                              initial=initial)
     else:
         _append_regular_blocks(blocks, company=company, initial=initial)
 
@@ -182,7 +183,8 @@ def build_order_modal(callback_id: str, *, usage: str = "",
 
 
 def _append_public_blocks(blocks: list, *, category: str,
-                          public_name: str, initial: dict) -> None:
+                          public_name: str, company: str,
+                          initial: dict) -> None:
     selected_cat = category or initial.get("category", "")
 
     # ③ 분류 (드롭다운, dispatch_action)
@@ -202,53 +204,72 @@ def _append_public_blocks(blocks: list, *, category: str,
         "element": cat_el,
     })
 
-    # ④ 물품명 (분류에 따라 드롭다운 또는 직접입력)
-    selected_name = public_name or initial.get("public_name", "")
-
-    if selected_cat and selected_cat != "기타":
-        items = list(PUBLIC_GOODS.get(selected_cat, {}).keys())
-        name_opts = [{"text": {"type": "plain_text", "text": n}, "value": n}
-                     for n in items]
-        name_opts.append({"text": {"type": "plain_text", "text": "직접 입력"},
-                          "value": "직접 입력"})
-        name_el = {"type": "static_select", "action_id": "public_name_input",
-                   "options": name_opts,
-                   "placeholder": {"type": "plain_text", "text": "물품 선택"}}
-        if selected_name and any(o["value"] == selected_name for o in name_opts):
-            name_el["initial_option"] = {
-                "text": {"type": "plain_text", "text": selected_name},
-                "value": selected_name}
-        blocks.append({
-            "type": "input", "block_id": "public_name_block",
-            "dispatch_action": True,
-            "label": {"type": "plain_text", "text": "물품명"},
-            "element": name_el,
-        })
-
-    # ④-1 직접 입력 필드 (기타 또는 '직접 입력' 선택 시)
-    if selected_cat == "기타" or selected_name == "직접 입력":
+    if selected_cat == "기타":
+        # 기타: 물품명 직접입력 + 일반 모드와 동일한 세부 필드
         custom_el = {"type": "plain_text_input",
                      "action_id": "public_name_custom_input",
                      "placeholder": {"type": "plain_text",
                                      "text": "물품명을 입력해주세요"}}
         if initial.get("public_name_custom"):
             custom_el["initial_value"] = initial["public_name_custom"]
+        elif initial.get("name"):
+            custom_el["initial_value"] = initial["name"]
         blocks.append({
             "type": "input", "block_id": "public_name_custom_block",
-            "label": {"type": "plain_text", "text": "물품명 직접입력"},
+            "label": {"type": "plain_text", "text": "물품명"},
+            "hint": {"type": "plain_text",
+                     "text": "Gmarket 물품의 경우 옵션까지 상세히 기입해주세요"},
             "element": custom_el,
         })
+        _append_detail_blocks(blocks, company=company, initial=initial)
+    else:
+        # 프리셋 분류: 물품명 드롭다운 + 수량만
+        selected_name = public_name or initial.get("public_name", "")
 
-    # ⑤ 수량
-    qty_el = {"type": "plain_text_input", "action_id": "quantity_input",
-              "placeholder": {"type": "plain_text", "text": "숫자만 표기해주세요"}}
-    if initial.get("quantity"):
-        qty_el["initial_value"] = initial["quantity"]
-    blocks.append({
-        "type": "input", "block_id": "quantity_block",
-        "label": {"type": "plain_text", "text": "수량"},
-        "element": qty_el,
-    })
+        if selected_cat:
+            items = list(PUBLIC_GOODS.get(selected_cat, {}).keys())
+            name_opts = [{"text": {"type": "plain_text", "text": n}, "value": n}
+                         for n in items]
+            name_opts.append({"text": {"type": "plain_text", "text": "직접 입력"},
+                              "value": "직접 입력"})
+            name_el = {"type": "static_select", "action_id": "public_name_input",
+                       "options": name_opts,
+                       "placeholder": {"type": "plain_text", "text": "물품 선택"}}
+            if selected_name and any(o["value"] == selected_name for o in name_opts):
+                name_el["initial_option"] = {
+                    "text": {"type": "plain_text", "text": selected_name},
+                    "value": selected_name}
+            blocks.append({
+                "type": "input", "block_id": "public_name_block",
+                "dispatch_action": True,
+                "label": {"type": "plain_text", "text": "물품명"},
+                "element": name_el,
+            })
+
+        # 직접 입력 필드 ('직접 입력' 선택 시)
+        if selected_name == "직접 입력":
+            custom_el = {"type": "plain_text_input",
+                         "action_id": "public_name_custom_input",
+                         "placeholder": {"type": "plain_text",
+                                         "text": "물품명을 입력해주세요"}}
+            if initial.get("public_name_custom"):
+                custom_el["initial_value"] = initial["public_name_custom"]
+            blocks.append({
+                "type": "input", "block_id": "public_name_custom_block",
+                "label": {"type": "plain_text", "text": "물품명 직접입력"},
+                "element": custom_el,
+            })
+
+        # 수량
+        qty_el = {"type": "plain_text_input", "action_id": "quantity_input",
+                  "placeholder": {"type": "plain_text", "text": "숫자만 표기해주세요"}}
+        if initial.get("quantity"):
+            qty_el["initial_value"] = initial["quantity"]
+        blocks.append({
+            "type": "input", "block_id": "quantity_block",
+            "label": {"type": "plain_text", "text": "수량"},
+            "element": qty_el,
+        })
 
 
 def _append_regular_blocks(blocks: list, *, company: str,
@@ -266,7 +287,12 @@ def _append_regular_blocks(blocks: list, *, company: str,
         "element": name_el,
     })
 
-    # ④ 거래처 (드롭다운 + dispatch_action)
+    _append_detail_blocks(blocks, company=company, initial=initial)
+
+
+def _append_detail_blocks(blocks: list, *, company: str,
+                          initial: dict) -> None:
+    # 거래처 (드롭다운 + dispatch_action)
     company_el = {"type": "static_select", "action_id": "company_input",
                   "options": COMPANY_OPTIONS,
                   "placeholder": {"type": "plain_text", "text": "거래처 선택"}}
@@ -282,7 +308,7 @@ def _append_regular_blocks(blocks: list, *, company: str,
         "element": company_el,
     })
 
-    # ④-1 거래처 직접입력
+    # 거래처 직접입력
     if selected_company == "직접입력":
         custom_el = {"type": "plain_text_input", "action_id": "company_custom_input",
                      "placeholder": {"type": "plain_text", "text": "거래처명을 입력해주세요"}}
@@ -294,7 +320,7 @@ def _append_regular_blocks(blocks: list, *, company: str,
             "element": custom_el,
         })
 
-    # ⑤ CAS/CAT No.
+    # CAS/CAT No.
     cas_el = {"type": "plain_text_input", "action_id": "cas_cat_input",
               "placeholder": {"type": "plain_text", "text": "예: SL.Sti4024"}}
     if initial.get("cas_cat"):
@@ -305,7 +331,7 @@ def _append_regular_blocks(blocks: list, *, company: str,
         "element": cas_el,
     })
 
-    # ⑥ 용량 및 규격
+    # 용량 및 규격
     spec_el = {"type": "plain_text_input", "action_id": "spec_input",
                "placeholder": {"type": "plain_text", "text": "예: 150/bx"}}
     if initial.get("spec"):
@@ -316,7 +342,7 @@ def _append_regular_blocks(blocks: list, *, company: str,
         "element": spec_el,
     })
 
-    # ⑦ 수량
+    # 수량
     qty_el = {"type": "plain_text_input", "action_id": "quantity_input",
               "placeholder": {"type": "plain_text", "text": "숫자만 표기해주세요"}}
     if initial.get("quantity"):
@@ -327,7 +353,7 @@ def _append_regular_blocks(blocks: list, *, company: str,
         "element": qty_el,
     })
 
-    # ⑧ 단위
+    # 단위
     unit_el = {"type": "static_select", "action_id": "unit_input",
                "options": UNIT_OPTIONS,
                "placeholder": {"type": "plain_text", "text": "단위 선택"}}
@@ -341,7 +367,7 @@ def _append_regular_blocks(blocks: list, *, company: str,
         "element": unit_el,
     })
 
-    # ⑨ 가격
+    # 가격
     price_el = {"type": "plain_text_input", "action_id": "price_input",
                 "placeholder": {"type": "plain_text", "text": "숫자만 표기해주세요"}}
     if initial.get("price"):
@@ -353,7 +379,7 @@ def _append_regular_blocks(blocks: list, *, company: str,
         "element": price_el,
     })
 
-    # ⑩ URL
+    # URL
     url_el = {"type": "plain_text_input", "action_id": "url_input",
               "placeholder": {"type": "plain_text", "text": "URL을 입력해주세요"}}
     if initial.get("url"):
@@ -366,7 +392,7 @@ def _append_regular_blocks(blocks: list, *, company: str,
         "element": url_el,
     })
 
-    # ⑪ 구매 목적
+    # 구매 목적
     purpose_el = {"type": "plain_text_input", "action_id": "purpose_input",
                   "multiline": True,
                   "placeholder": {"type": "plain_text",
@@ -439,62 +465,74 @@ def extract_order_fields(view) -> dict:
     loc = values.get("location_block", {}).get("location_input", {})
     data["location"] = (loc.get("selected_option") or {}).get("value", "")
 
-    qty = values.get("quantity_block", {}).get("quantity_input", {})
-    data["quantity"] = (qty.get("value") or "").strip()
-
     if data["usage"] == "공용":
         cat = values.get("category_block", {}).get("category_input", {})
         data["category"] = (cat.get("selected_option") or {}).get("value", "")
 
-        pn = values.get("public_name_block", {}).get("public_name_input", {})
-        data["public_name"] = (pn.get("selected_option") or {}).get("value", "")
-
-        pnc = values.get("public_name_custom_block", {}).get("public_name_custom_input", {})
-        data["public_name_custom"] = (pnc.get("value") or "").strip() if pnc else ""
-
-        # 물품명 확정
-        if data["category"] == "기타" or data["public_name"] == "직접 입력":
-            data["name"] = data["public_name_custom"]
+        if data["category"] == "기타":
+            # 기타: 물품명 직접입력 + 일반 모드와 동일한 세부 필드
+            pnc = values.get("public_name_custom_block", {}).get("public_name_custom_input", {})
+            data["name"] = (pnc.get("value") or "").strip() if pnc else ""
+            _extract_detail_values(data, values)
         else:
-            data["name"] = data["public_name"]
+            # 프리셋 분류
+            pn = values.get("public_name_block", {}).get("public_name_input", {})
+            data["public_name"] = (pn.get("selected_option") or {}).get("value", "")
 
-        # 프리셋 데이터 채우기
-        preset = PUBLIC_GOODS.get(data["category"], {}).get(data["name"], {})
-        if preset:
-            data["company"]  = preset["company"]
-            data["unit"]     = preset["unit"]
-            data["spec"]     = preset["spec"]
-            data["cas_cat"]  = preset["cas_cat"]
-            data["price"]    = preset["price"]
+            pnc = values.get("public_name_custom_block", {}).get("public_name_custom_input", {})
+            data["public_name_custom"] = (pnc.get("value") or "").strip() if pnc else ""
+
+            if data["public_name"] == "직접 입력":
+                data["name"] = data["public_name_custom"]
+            else:
+                data["name"] = data["public_name"]
+
+            qty = values.get("quantity_block", {}).get("quantity_input", {})
+            data["quantity"] = (qty.get("value") or "").strip()
+
+            # 프리셋 데이터 채우기
+            preset = PUBLIC_GOODS.get(data["category"], {}).get(data["name"], {})
+            if preset:
+                data["company"]  = preset["company"]
+                data["unit"]     = preset["unit"]
+                data["spec"]     = preset["spec"]
+                data["cas_cat"]  = preset["cas_cat"]
+                data["price"]    = preset["price"]
     else:
         name = values.get("name_block", {}).get("name_input", {})
         data["name"] = (name.get("value") or "").strip()
-
-        company = values.get("company_block", {}).get("company_input", {})
-        data["company"] = (company.get("selected_option") or {}).get("value", "")
-
-        custom = values.get("company_custom_block", {}).get("company_custom_input", {})
-        data["company_custom"] = (custom.get("value") or "").strip() if custom else ""
-
-        cas = values.get("cas_cat_block", {}).get("cas_cat_input", {})
-        data["cas_cat"] = (cas.get("value") or "").strip()
-
-        spec = values.get("spec_block", {}).get("spec_input", {})
-        data["spec"] = (spec.get("value") or "").strip()
-
-        unit = values.get("unit_block", {}).get("unit_input", {})
-        data["unit"] = (unit.get("selected_option") or {}).get("value", "")
-
-        price = values.get("price_block", {}).get("price_input", {})
-        data["price"] = (price.get("value") or "").strip()
-
-        url = values.get("url_block", {}).get("url_input", {})
-        data["url"] = (url.get("value") or "").strip()
-
-        purpose = values.get("purpose_block", {}).get("purpose_input", {})
-        data["purpose"] = (purpose.get("value") or "").strip()
+        _extract_detail_values(data, values)
 
     return data
+
+
+def _extract_detail_values(data: dict, values: dict) -> None:
+    company = values.get("company_block", {}).get("company_input", {})
+    data["company"] = (company.get("selected_option") or {}).get("value", "")
+
+    custom = values.get("company_custom_block", {}).get("company_custom_input", {})
+    data["company_custom"] = (custom.get("value") or "").strip() if custom else ""
+
+    cas = values.get("cas_cat_block", {}).get("cas_cat_input", {})
+    data["cas_cat"] = (cas.get("value") or "").strip()
+
+    spec = values.get("spec_block", {}).get("spec_input", {})
+    data["spec"] = (spec.get("value") or "").strip()
+
+    qty = values.get("quantity_block", {}).get("quantity_input", {})
+    data["quantity"] = (qty.get("value") or "").strip()
+
+    unit = values.get("unit_block", {}).get("unit_input", {})
+    data["unit"] = (unit.get("selected_option") or {}).get("value", "")
+
+    price = values.get("price_block", {}).get("price_input", {})
+    data["price"] = (price.get("value") or "").strip()
+
+    url = values.get("url_block", {}).get("url_input", {})
+    data["url"] = (url.get("value") or "").strip()
+
+    purpose = values.get("purpose_block", {}).get("purpose_input", {})
+    data["purpose"] = (purpose.get("value") or "").strip()
 
 
 # ── 메시지 포맷터 ─────────────────────────────────────────────────────────────
@@ -507,7 +545,7 @@ def _resolve_company(data: dict) -> str:
 
 def format_order_message(requester_id: str, data: dict,
                          edited: bool = False) -> str:
-    if data.get("usage") == "공용":
+    if data.get("usage") == "공용" and data.get("category") != "기타":
         lines = [
             "[공용물품 등록]",
             f"주문장소: {data.get('location', '')}",
@@ -525,13 +563,18 @@ def format_order_message(requester_id: str, data: dict,
         lines.append(f"주문자: <@{requester_id}>")
     else:
         company = _resolve_company(data)
+        is_public_etc = data.get("usage") == "공용" and data.get("category") == "기타"
         lines = [
-            "[물품등록]",
+            "[공용물품 등록]" if is_public_etc else "[물품등록]",
             f"물품용도: {data.get('usage', '')}",
             f"주문장소: {data.get('location', '')}",
+        ]
+        if is_public_etc:
+            lines.append(f"분류: {data.get('category', '')}")
+        lines.extend([
             f"물품명: {data.get('name', '')}",
             f"거래처: {company}",
-        ]
+        ])
         if data.get("cas_cat"):
             lines.append(f"CAS/CAT No.: {data['cas_cat']}")
         lines.append(f"용량 및 규격: {data.get('spec', '')}")
@@ -609,7 +652,10 @@ def handle_company_change(ack, body, client):
         view_id=view["id"],
         view=build_order_modal(
             view["callback_id"], usage=initial.get("usage", ""),
-            company=selected, initial=initial,
+            company=selected,
+            category=initial.get("category", ""),
+            public_name=initial.get("public_name", ""),
+            initial=initial,
             private_metadata=view.get("private_metadata", "")))
 
 
@@ -714,11 +760,30 @@ def _validate_order(data: dict) -> dict:
     if data.get("usage") == "공용":
         if not data.get("category"):
             errors["category_block"] = "분류를 선택해주세요."
-        if not data.get("name"):
-            if data.get("category") == "기타" or data.get("public_name") == "직접 입력":
+
+        if data.get("category") == "기타":
+            # 기타: 일반 모드와 동일한 검증
+            if not data.get("name"):
                 errors["public_name_custom_block"] = "물품명을 입력해주세요."
-            else:
-                errors["public_name_block"] = "물품명을 선택해주세요."
+            if not data.get("company"):
+                errors["company_block"] = "거래처를 선택해주세요."
+            if data.get("company") == "직접입력" and not data.get("company_custom"):
+                errors["company_custom_block"] = "거래처명을 입력해주세요."
+            if not data.get("spec"):
+                errors["spec_block"] = "용량 및 규격을 입력해주세요."
+            if not data.get("unit"):
+                errors["unit_block"] = "단위를 선택해주세요."
+            if not data.get("price"):
+                errors["price_block"] = "가격을 입력해주세요."
+            if not data.get("purpose"):
+                errors["purpose_block"] = "구매 목적을 입력해주세요."
+        else:
+            # 프리셋 분류
+            if not data.get("name"):
+                if data.get("public_name") == "직접 입력":
+                    errors["public_name_custom_block"] = "물품명을 입력해주세요."
+                else:
+                    errors["public_name_block"] = "물품명을 선택해주세요."
     else:
         if not data.get("name"):
             errors["name_block"] = "물품명을 입력해주세요."
