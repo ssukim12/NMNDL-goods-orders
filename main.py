@@ -240,12 +240,17 @@ def _append_public_blocks(blocks: list, *, category: str,
                 name_el["initial_option"] = {
                     "text": {"type": "plain_text", "text": selected_name},
                     "value": selected_name}
-            blocks.append({
+            name_block = {
                 "type": "input", "block_id": "public_name_block",
                 "dispatch_action": True,
                 "label": {"type": "plain_text", "text": "물품명"},
                 "element": name_el,
-            })
+            }
+            if selected_cat == "KIMTECH":
+                name_block["hint"] = {
+                    "type": "plain_text",
+                    "text": "Kimtowls는 두꺼운 와이퍼, Kimwipes는 곽티슈 형태의 얇은 와이퍼입니다"}
+            blocks.append(name_block)
 
         # 직접 입력 필드 ('직접 입력' 선택 시)
         if selected_name == "직접 입력":
