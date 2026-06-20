@@ -205,7 +205,7 @@ def _append_public_blocks(blocks: list, *, category: str,
     })
 
     if selected_cat == "기타":
-        # 기타: 물품명 직접입력 + 일반 모드와 동일한 세부 필드
+        # 기타: 물품명 직접입력 + 세부 필드 (구매 목적 제외)
         custom_el = {"type": "plain_text_input",
                      "action_id": "public_name_custom_input",
                      "placeholder": {"type": "plain_text",
@@ -221,7 +221,8 @@ def _append_public_blocks(blocks: list, *, category: str,
                      "text": "Gmarket 물품의 경우 옵션까지 상세히 기입해주세요"},
             "element": custom_el,
         })
-        _append_detail_blocks(blocks, company=company, initial=initial)
+        _append_detail_blocks(blocks, company=company, initial=initial,
+                              skip_purpose=True)
     else:
         # 프리셋 분류: 물품명 드롭다운 + 수량만
         selected_name = public_name or initial.get("public_name", "")
@@ -291,7 +292,7 @@ def _append_regular_blocks(blocks: list, *, company: str,
 
 
 def _append_detail_blocks(blocks: list, *, company: str,
-                          initial: dict) -> None:
+                          initial: dict, skip_purpose: bool = False) -> None:
     # 거래처 (드롭다운 + dispatch_action)
     company_el = {"type": "static_select", "action_id": "company_input",
                   "options": COMPANY_OPTIONS,
@@ -393,17 +394,18 @@ def _append_detail_blocks(blocks: list, *, company: str,
     })
 
     # 구매 목적
-    purpose_el = {"type": "plain_text_input", "action_id": "purpose_input",
-                  "multiline": True,
-                  "placeholder": {"type": "plain_text",
-                                  "text": "구매 목적을 입력해주세요"}}
-    if initial.get("purpose"):
-        purpose_el["initial_value"] = initial["purpose"]
-    blocks.append({
-        "type": "input", "block_id": "purpose_block",
-        "label": {"type": "plain_text", "text": "구매 목적"},
-        "element": purpose_el,
-    })
+    if not skip_purpose:
+        purpose_el = {"type": "plain_text_input", "action_id": "purpose_input",
+                      "multiline": True,
+                      "placeholder": {"type": "plain_text",
+                                      "text": "구매 목적을 입력해주세요"}}
+        if initial.get("purpose"):
+            purpose_el["initial_value"] = initial["purpose"]
+        blocks.append({
+            "type": "input", "block_id": "purpose_block",
+            "label": {"type": "plain_text", "text": "구매 목적"},
+            "element": purpose_el,
+        })
 
 
 # ── 모달 상태 보존 ────────────────────────────────────────────────────────────
@@ -775,8 +777,6 @@ def _validate_order(data: dict) -> dict:
                 errors["unit_block"] = "단위를 선택해주세요."
             if not data.get("price"):
                 errors["price_block"] = "가격을 입력해주세요."
-            if not data.get("purpose"):
-                errors["purpose_block"] = "구매 목적을 입력해주세요."
         else:
             # 프리셋 분류
             if not data.get("name"):
