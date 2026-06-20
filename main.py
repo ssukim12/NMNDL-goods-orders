@@ -33,9 +33,10 @@ ORDER_CHANNEL  = os.environ.get("CHANNEL_ID", "")
 ORDER_LOCATIONS = ["83709A", "36719", "36721", "36817", "25421"]
 
 USAGE_OPTIONS = [
-    {"text": {"type": "plain_text", "text": "개인연구용"}, "value": "개인연구용"},
-    {"text": {"type": "plain_text", "text": "과제연구용"}, "value": "과제연구용"},
-    {"text": {"type": "plain_text", "text": "공용"},       "value": "공용"},
+    {"text": {"type": "plain_text", "text": "개인연구용"},              "value": "개인연구용"},
+    {"text": {"type": "plain_text", "text": "과제연구용"},              "value": "과제연구용"},
+    {"text": {"type": "plain_text", "text": "공용"},                   "value": "공용"},
+    {"text": {"type": "plain_text", "text": "공용 (랩장 별도 허가 필요)"}, "value": "공용 (랩장 별도 허가 필요)"},
 ]
 
 COMPANY_OPTIONS = [
