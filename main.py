@@ -200,6 +200,31 @@ def build_order_modal(callback_id: str, *, company: str = "",
         "element": price_el,
     })
 
+    # ⑩ URL
+    url_el = {"type": "plain_text_input", "action_id": "url_input",
+              "placeholder": {"type": "plain_text", "text": "URL을 입력해주세요"}}
+    if initial.get("url"):
+        url_el["initial_value"] = initial["url"]
+    blocks.append({
+        "type": "input", "block_id": "url_block",
+        "label": {"type": "plain_text", "text": "URL"},
+        "hint": {"type": "plain_text",
+                 "text": "URL이 없는 경우 '없음'이라고 표기해주세요"},
+        "element": url_el,
+    })
+
+    # ⑪ 구매 목적
+    purpose_el = {"type": "plain_text_input", "action_id": "purpose_input",
+                  "multiline": True,
+                  "placeholder": {"type": "plain_text", "text": "구매 목적을 입력해주세요"}}
+    if initial.get("purpose"):
+        purpose_el["initial_value"] = initial["purpose"]
+    blocks.append({
+        "type": "input", "block_id": "purpose_block",
+        "label": {"type": "plain_text", "text": "구매 목적"},
+        "element": purpose_el,
+    })
+
     title = "물품 구매 요청" if callback_id == "order_request_modal" else "주문 내용 수정"
     submit = "요청" if callback_id == "order_request_modal" else "수정"
     modal = {
@@ -227,7 +252,7 @@ def _extract_current_values(state: dict) -> dict:
     if loc.get("selected_option"):
         data["location"] = loc["selected_option"]["value"]
 
-    for key in ("name", "cas_cat", "spec", "quantity", "price"):
+    for key in ("name", "cas_cat", "spec", "quantity", "price", "url", "purpose"):
         block = state.get(f"{key}_block", {}).get(f"{key}_input", {})
         if block.get("value"):
             data[key] = block["value"].strip()
@@ -283,6 +308,12 @@ def extract_order_fields(view) -> dict:
     price = values.get("price_block", {}).get("price_input", {})
     data["price"] = (price.get("value") or "").strip()
 
+    url = values.get("url_block", {}).get("url_input", {})
+    data["url"] = (url.get("value") or "").strip()
+
+    purpose = values.get("purpose_block", {}).get("purpose_input", {})
+    data["purpose"] = (purpose.get("value") or "").strip()
+
     return data
 
 
@@ -309,6 +340,10 @@ def format_order_message(requester_id: str, data: dict,
     lines.append(f"용량 및 규격: {data.get('spec', '')}")
     lines.append(f"수량: {data.get('quantity', '')} {data.get('unit', '')}")
     lines.append(f"가격: {data.get('price', '')}원")
+    if data.get("url"):
+        lines.append(f"URL: {data['url']}")
+    if data.get("purpose"):
+        lines.append(f"구매 목적: {data['purpose']}")
     lines.append(f"주문자: <@{requester_id}>")
     if edited:
         lines.append("_(수정됨)_")
@@ -394,6 +429,8 @@ def handle_order_modal(ack, body, client, view):
         errors["unit_block"] = "단위를 선택해주세요."
     if not data.get("price"):
         errors["price_block"] = "가격을 입력해주세요."
+    if not data.get("purpose"):
+        errors["purpose_block"] = "구매 목적을 입력해주세요."
     if errors:
         ack(response_action="errors", errors=errors)
         return
@@ -582,6 +619,8 @@ def handle_edit_modal(ack, body, client, view):
         errors["unit_block"] = "단위를 선택해주세요."
     if not data.get("price"):
         errors["price_block"] = "가격을 입력해주세요."
+    if not data.get("purpose"):
+        errors["purpose_block"] = "구매 목적을 입력해주세요."
     if errors:
         ack(response_action="errors", errors=errors)
         return
