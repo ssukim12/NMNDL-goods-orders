@@ -13,10 +13,13 @@ NMNDL 물품 구매 승인 봇 (모달 폼 버전)
 """
 
 import json
+import logging
 import os
 import sys
+from datetime import date
 from pathlib import Path
 from dotenv import load_dotenv
+import gspread
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
@@ -26,6 +29,40 @@ app = App(token=os.environ.get("SLACK_BOT_TOKEN"))
 
 LAB_MANAGER_ID = os.environ.get("LAB_MANAGER_ID", "")
 ORDER_CHANNEL  = os.environ.get("CHANNEL_ID", "")
+
+# ── Google Sheets 연동 초기화 ─────────────────────────────────────────────────
+_logger = logging.getLogger(__name__)
+
+USAGE_TO_SHEET = {
+    "개인연구용":              "02_개인 시약/물품/가스 지출 현황",
+    "과제연구용":              "04_과제별 시약/물품 지출 현황",
+    "공용":                   "05_공용 시약/물품/가스 지출 현황",
+    "공용 (랩장 별도 허가 필요)": "05_공용 시약/물품/가스 지출 현황",
+}
+
+def _init_spreadsheet():
+    sheet_id = os.environ.get("ADMIN_SHEET_ID")
+    if not sheet_id:
+        return None
+    sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    if sa_json:
+        gc = gspread.service_account_from_dict(json.loads(sa_json))
+    else:
+        sa_file = Path(__file__).parent / "service_account.json"
+        if not sa_file.exists():
+            return None
+        gc = gspread.service_account(filename=sa_file)
+    return gc.open_by_key(sheet_id)
+
+try:
+    _spreadsheet = _init_spreadsheet()
+    if _spreadsheet:
+        print("[Sheets] Google Sheets 연결 완료")
+    else:
+        print("[Sheets] Google Sheets 미연결 — ADMIN_SHEET_ID 또는 서비스 계정 확인 필요")
+except Exception as e:
+    _spreadsheet = None
+    print(f"[Sheets] Google Sheets 연결 실패: {e}")
 
 
 # ── 상수 ──────────────────────────────────────────────────────────────────────
@@ -37,15 +74,6 @@ USAGE_OPTIONS = [
     {"text": {"type": "plain_text", "text": "과제연구용"},              "value": "과제연구용"},
     {"text": {"type": "plain_text", "text": "공용"},                   "value": "공용"},
     {"text": {"type": "plain_text", "text": "공용 (랩장 별도 허가 필요)"}, "value": "공용 (랩장 별도 허가 필요)"},
-]
-
-COMPANY_OPTIONS = [
-    {"text": {"type": "plain_text", "text": "그린텍"},     "value": "그린텍"},
-    {"text": {"type": "plain_text", "text": "성호씨그마"}, "value": "성호씨그마"},
-    {"text": {"type": "plain_text", "text": "(주)웰코스"}, "value": "(주)웰코스"},
-    {"text": {"type": "plain_text", "text": "극동유류"},   "value": "극동유류"},
-    {"text": {"type": "plain_text", "text": "드림디포"},   "value": "드림디포"},
-    {"text": {"type": "plain_text", "text": "직접입력"},   "value": "직접입력"},
 ]
 
 UNIT_OPTIONS = [
@@ -120,10 +148,65 @@ def get_dm_channel(client, user_id: str) -> str:
     return resp["channel"]["id"]
 
 
+def _get_requester_name(client, user_id: str) -> str:
+    info = client.users_info(user=user_id)
+    return (
+        info["user"]["profile"].get("display_name")
+        or info["user"].get("real_name", user_id)
+    )
+
+
+def append_to_sheet(client, requester_id: str, data: dict) -> None:
+    if _spreadsheet is None:
+        print("[Sheets] 스프레드시트 미연결 — 기록 건너뜀")
+        return
+    usage = data.get("usage", "")
+    sheet_name = USAGE_TO_SHEET.get(usage)
+    if not sheet_name:
+        print(f"[Sheets] 매핑되지 않은 물품용도: {usage}")
+        return
+    try:
+        ws = _spreadsheet.worksheet(sheet_name)
+
+        company = "루미랩사이언스"
+        quantity = data.get("quantity", "")
+        price = data.get("price", "")
+
+        try:
+            total = int(quantity) * int(price)
+        except (ValueError, TypeError):
+            total = ""
+
+        requester_name = _get_requester_name(client, requester_id)
+        next_row = len(ws.col_values(1)) + 1
+
+        row = [
+            "",                          # A: 순번
+            "",                          # B: 구분
+            date.today().isoformat(),    # C: 구매 날짜
+            data.get("name", ""),        # D: 물품명
+            requester_name,              # E: 이름
+            "",                          # F: 인원수
+            company,                     # G: 거래처
+            quantity,                    # H: 수량
+            data.get("unit", ""),        # I: 단위
+            data.get("spec", ""),        # J: 용량 및 규격
+            data.get("cas_cat", ""),     # K: CAS/Cat. No.
+            price,                       # L: 날개별 금액
+            total,                       # M: 청구 금액
+            data.get("purpose", ""),     # N: 구매 목적
+            "",                          # O: 기타
+        ]
+        ws.update(f"A{next_row}", [row], value_input_option="RAW")
+        print(f"[Sheets] 기록 완료: {data.get('name', '')} → {sheet_name} (행 {next_row})")
+    except Exception as e:
+        print(f"[Sheets] 기록 실패: {e}")
+
+
 # ── 모달 빌드 ─────────────────────────────────────────────────────────────────
 
 def build_order_modal(callback_id: str, *, usage: str = "",
-                      company: str = "", category: str = "",
+                      category: str = "",
                       public_name: str = "",
                       initial: dict | None = None,
                       private_metadata: str = "") -> dict:
@@ -164,10 +247,10 @@ def build_order_modal(callback_id: str, *, usage: str = "",
     # ── 분기: 공용 vs 일반 ────────────────────────────────────────────────
     if selected_usage == "공용":
         _append_public_blocks(blocks, category=category,
-                              public_name=public_name, company=company,
+                              public_name=public_name,
                               initial=initial)
     else:
-        _append_regular_blocks(blocks, company=company, initial=initial)
+        _append_regular_blocks(blocks, initial=initial)
 
     title = "물품 구매 요청" if callback_id == "order_request_modal" else "주문 내용 수정"
     submit = "요청" if callback_id == "order_request_modal" else "수정"
@@ -184,7 +267,7 @@ def build_order_modal(callback_id: str, *, usage: str = "",
 
 
 def _append_public_blocks(blocks: list, *, category: str,
-                          public_name: str, company: str,
+                          public_name: str,
                           initial: dict) -> None:
     selected_cat = category or initial.get("category", "")
 
@@ -222,8 +305,7 @@ def _append_public_blocks(blocks: list, *, category: str,
                      "text": "Gmarket 물품의 경우 옵션까지 상세히 기입해주세요"},
             "element": custom_el,
         })
-        _append_detail_blocks(blocks, company=company, initial=initial,
-                              skip_purpose=True)
+        _append_detail_blocks(blocks, initial=initial, skip_purpose=True)
     else:
         # 프리셋 분류: 물품명 드롭다운 + 수량만
         selected_name = public_name or initial.get("public_name", "")
@@ -279,8 +361,7 @@ def _append_public_blocks(blocks: list, *, category: str,
         })
 
 
-def _append_regular_blocks(blocks: list, *, company: str,
-                           initial: dict) -> None:
+def _append_regular_blocks(blocks: list, *, initial: dict) -> None:
     # ③ 물품명
     name_el = {"type": "plain_text_input", "action_id": "name_input",
                "placeholder": {"type": "plain_text", "text": "물품명을 입력해주세요"}}
@@ -294,39 +375,11 @@ def _append_regular_blocks(blocks: list, *, company: str,
         "element": name_el,
     })
 
-    _append_detail_blocks(blocks, company=company, initial=initial)
+    _append_detail_blocks(blocks, initial=initial)
 
 
-def _append_detail_blocks(blocks: list, *, company: str,
+def _append_detail_blocks(blocks: list, *,
                           initial: dict, skip_purpose: bool = False) -> None:
-    # 거래처 (드롭다운 + dispatch_action)
-    company_el = {"type": "static_select", "action_id": "company_input",
-                  "options": COMPANY_OPTIONS,
-                  "placeholder": {"type": "plain_text", "text": "거래처 선택"}}
-    selected_company = company or initial.get("company", "")
-    if selected_company and any(o["value"] == selected_company for o in COMPANY_OPTIONS):
-        company_el["initial_option"] = {
-            "text": {"type": "plain_text", "text": selected_company},
-            "value": selected_company}
-    blocks.append({
-        "type": "input", "block_id": "company_block",
-        "dispatch_action": True,
-        "label": {"type": "plain_text", "text": "거래처"},
-        "element": company_el,
-    })
-
-    # 거래처 직접입력
-    if selected_company == "직접입력":
-        custom_el = {"type": "plain_text_input", "action_id": "company_custom_input",
-                     "placeholder": {"type": "plain_text", "text": "거래처명을 입력해주세요"}}
-        if initial.get("company_custom"):
-            custom_el["initial_value"] = initial["company_custom"]
-        blocks.append({
-            "type": "input", "block_id": "company_custom_block",
-            "label": {"type": "plain_text", "text": "거래처 직접입력"},
-            "element": custom_el,
-        })
-
     # CAS/CAT No.
     cas_el = {"type": "plain_text_input", "action_id": "cas_cat_input",
               "placeholder": {"type": "plain_text", "text": "예: SL.Sti4024"}}
@@ -433,14 +486,6 @@ def _extract_current_values(state: dict) -> dict:
         if block.get("value"):
             data[key] = block["value"].strip()
 
-    company = state.get("company_block", {}).get("company_input", {})
-    if company.get("selected_option"):
-        data["company"] = company["selected_option"]["value"]
-
-    custom = state.get("company_custom_block", {}).get("company_custom_input", {})
-    if custom and custom.get("value"):
-        data["company_custom"] = custom["value"].strip()
-
     unit = state.get("unit_block", {}).get("unit_input", {})
     if unit.get("selected_option"):
         data["unit"] = unit["selected_option"]["value"]
@@ -515,12 +560,6 @@ def extract_order_fields(view) -> dict:
 
 
 def _extract_detail_values(data: dict, values: dict) -> None:
-    company = values.get("company_block", {}).get("company_input", {})
-    data["company"] = (company.get("selected_option") or {}).get("value", "")
-
-    custom = values.get("company_custom_block", {}).get("company_custom_input", {})
-    data["company_custom"] = (custom.get("value") or "").strip() if custom else ""
-
     cas = values.get("cas_cat_block", {}).get("cas_cat_input", {})
     data["cas_cat"] = (cas.get("value") or "").strip()
 
@@ -545,12 +584,6 @@ def _extract_detail_values(data: dict, values: dict) -> None:
 
 # ── 메시지 포맷터 ─────────────────────────────────────────────────────────────
 
-def _resolve_company(data: dict) -> str:
-    if data.get("company") == "직접입력" and data.get("company_custom"):
-        return data["company_custom"]
-    return data.get("company", "")
-
-
 def format_order_message(requester_id: str, data: dict,
                          edited: bool = False) -> str:
     if data.get("usage") == "공용" and data.get("category") != "기타":
@@ -560,8 +593,7 @@ def format_order_message(requester_id: str, data: dict,
             f"분류: {data.get('category', '')}",
             f"물품명: {data.get('name', '')}",
         ]
-        if data.get("company"):
-            lines.append(f"거래처: {data['company']}")
+        lines.append(f"거래처: 루미랩사이언스")
         if data.get("spec"):
             lines.append(f"용량 및 규격: {data['spec']}")
         unit_str = f" {data['unit']}" if data.get("unit") else ""
@@ -570,7 +602,6 @@ def format_order_message(requester_id: str, data: dict,
             lines.append(f"가격: {data['price']}원")
         lines.append(f"주문자: <@{requester_id}>")
     else:
-        company = _resolve_company(data)
         is_public_etc = data.get("usage") == "공용" and data.get("category") == "기타"
         lines = [
             "[공용물품 등록]" if is_public_etc else "[물품등록]",
@@ -581,7 +612,7 @@ def format_order_message(requester_id: str, data: dict,
             lines.append(f"분류: {data.get('category', '')}")
         lines.extend([
             f"물품명: {data.get('name', '')}",
-            f"거래처: {company}",
+            f"거래처: 루미랩사이언스",
         ])
         if data.get("cas_cat"):
             lines.append(f"CAS/CAT No.: {data['cas_cat']}")
@@ -647,26 +678,6 @@ def handle_usage_change(ack, body, client):
             private_metadata=view.get("private_metadata", "")))
 
 
-# ── 거래처 변경 시 모달 동적 갱신 ─────────────────────────────────────────────
-
-@app.action("company_input")
-def handle_company_change(ack, body, client):
-    ack()
-    selected = body["actions"][0]["selected_option"]["value"]
-    view = body["view"]
-    initial = _extract_current_values(view["state"]["values"])
-
-    client.views_update(
-        view_id=view["id"],
-        view=build_order_modal(
-            view["callback_id"], usage=initial.get("usage", ""),
-            company=selected,
-            category=initial.get("category", ""),
-            public_name=initial.get("public_name", ""),
-            initial=initial,
-            private_metadata=view.get("private_metadata", "")))
-
-
 # ── 분류 변경 시 물품명 드롭다운 갱신 ─────────────────────────────────────────
 
 @app.action("category_input")
@@ -727,6 +738,7 @@ def handle_order_modal(ack, body, client, view):
             channel=ORDER_CHANNEL,
             text=format_order_message(requester_id, data),
             blocks=order_channel_blocks(requester_id, data))
+        append_to_sheet(client, requester_id, data)
     else:
         payload = json.dumps({"requester_id": requester_id, "data": data},
                              ensure_ascii=False)
@@ -773,10 +785,6 @@ def _validate_order(data: dict) -> dict:
             # 기타: 일반 모드와 동일한 검증
             if not data.get("name"):
                 errors["public_name_custom_block"] = "물품명을 입력해주세요."
-            if not data.get("company"):
-                errors["company_block"] = "거래처를 선택해주세요."
-            if data.get("company") == "직접입력" and not data.get("company_custom"):
-                errors["company_custom_block"] = "거래처명을 입력해주세요."
             if not data.get("spec"):
                 errors["spec_block"] = "용량 및 규격을 입력해주세요."
             if not data.get("unit"):
@@ -793,10 +801,6 @@ def _validate_order(data: dict) -> dict:
     else:
         if not data.get("name"):
             errors["name_block"] = "물품명을 입력해주세요."
-        if not data.get("company"):
-            errors["company_block"] = "거래처를 선택해주세요."
-        if data.get("company") == "직접입력" and not data.get("company_custom"):
-            errors["company_custom_block"] = "거래처명을 입력해주세요."
         if not data.get("spec"):
             errors["spec_block"] = "용량 및 규격을 입력해주세요."
         if not data.get("unit"):
@@ -835,6 +839,8 @@ def handle_approval(ack, body, client):
         channel=ORDER_CHANNEL,
         text=format_order_message(requester_id, data),
         blocks=order_channel_blocks(requester_id, data))
+
+    append_to_sheet(client, requester_id, data)
 
 
 # ── 거절 버튼 → 모달 오픈 ────────────────────────────────────────────────────
