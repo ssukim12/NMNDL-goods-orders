@@ -590,7 +590,6 @@ def format_order_message(requester_id: str, data: dict,
         lines = [
             "[공용물품]",
             f"주문장소: {data.get('location', '')}",
-            f"분류: {data.get('category', '')}",
             f"물품명: {data.get('name', '')}",
         ]
         lines.append(f"거래처: 루미랩사이언스")
@@ -611,8 +610,6 @@ def format_order_message(requester_id: str, data: dict,
             f"물품용도: {data.get('usage', '')}",
             f"주문장소: {data.get('location', '')}",
         ]
-        if is_public_etc:
-            lines.append(f"분류: {data.get('category', '')}")
         lines.extend([
             f"물품명: {data.get('name', '')}",
             f"거래처: 루미랩사이언스",
