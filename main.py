@@ -117,7 +117,7 @@ PUBLIC_GOODS = {
         "Label tape, 3/4\", Yellow": {"company": "그린텍", "unit": "EA", "spec": "1/ea", "cas_cat": "BE.F13463.2075", "price": "14850"},
         "Label tape, 3/4\", Orange": {"company": "그린텍", "unit": "EA", "spec": "1/ea", "cas_cat": "BE.F13463.5075", "price": "14850"},
     },
-    "Weighin paper": {
+    "Weighing paper": {
         "Disposable weighing paper, 10*10cm": {"company": "그린텍", "unit": "PK", "spec": "500 strips/pk", "cas_cat": "DH.WEP002", "price": "2200"},
     },
     "Petridish": {
