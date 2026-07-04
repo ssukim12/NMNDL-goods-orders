@@ -181,8 +181,7 @@ def append_to_sheet(client, requester_id: str, data: dict) -> None:
         next_row = len(ws.col_values(4)) + 1  # D열(물품명) 기준
 
         row = [
-            "",                          # A: 순번
-            "",                          # B: 구분
+            "물품",                       # B: 구분
             date.today().isoformat(),    # C: 구매 날짜
             data.get("name", ""),        # D: 물품명
             requester_name,              # E: 이름
@@ -197,7 +196,7 @@ def append_to_sheet(client, requester_id: str, data: dict) -> None:
             data.get("purpose", ""),     # N: 구매 목적
             "",                          # O: 기타
         ]
-        ws.update(f"A{next_row}", [row], value_input_option="RAW")
+        ws.update(f"B{next_row}", [row], value_input_option="RAW")
         print(f"[Sheets] 기록 완료: {data.get('name', '')} → {sheet_name} (행 {next_row})")
     except Exception as e:
         print(f"[Sheets] 기록 실패: {e}")
