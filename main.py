@@ -178,7 +178,7 @@ def append_to_sheet(client, requester_id: str, data: dict) -> None:
             total = ""
 
         requester_name = _get_requester_name(client, requester_id)
-        next_row = len(ws.col_values(1)) + 1
+        next_row = len(ws.col_values(4)) + 1  # D열(물품명) 기준
 
         row = [
             "",                          # A: 순번
