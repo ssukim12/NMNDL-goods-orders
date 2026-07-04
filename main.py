@@ -592,7 +592,6 @@ def format_order_message(requester_id: str, data: dict,
             f"주문장소: {data.get('location', '')}",
             f"물품명: {data.get('name', '')}",
         ]
-        lines.append(f"거래처: 루미랩사이언스")
         if data.get("spec"):
             lines.append(f"용량 및 규격: {data['spec']}")
         unit_str = f" {data['unit']}" if data.get("unit") else ""
@@ -610,10 +609,7 @@ def format_order_message(requester_id: str, data: dict,
             f"물품용도: {data.get('usage', '')}",
             f"주문장소: {data.get('location', '')}",
         ]
-        lines.extend([
-            f"물품명: {data.get('name', '')}",
-            f"거래처: 루미랩사이언스",
-        ])
+        lines.append(f"물품명: {data.get('name', '')}")
         if data.get("cas_cat"):
             lines.append(f"CAS/CAT No.: {data['cas_cat']}")
         lines.append(f"용량 및 규격: {data.get('spec', '')}")
