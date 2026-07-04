@@ -603,8 +603,9 @@ def format_order_message(requester_id: str, data: dict,
         lines.append(f"주문자: <@{requester_id}>")
     else:
         is_public_etc = data.get("usage") == "공용" and data.get("category") == "기타"
+        is_public_header = is_public_etc or data.get("usage") == "공용 (랩장 별도 허가 필요)"
         lines = []
-        if is_public_etc:
+        if is_public_header:
             lines.append("[공용물품]")
         lines += [
             f"물품용도: {data.get('usage', '')}",
