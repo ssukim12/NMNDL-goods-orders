@@ -588,7 +588,7 @@ def format_order_message(requester_id: str, data: dict,
                          edited: bool = False) -> str:
     if data.get("usage") == "공용" and data.get("category") != "기타":
         lines = [
-            "[공용물품 등록]",
+            "[공용물품]",
             f"주문장소: {data.get('location', '')}",
             f"분류: {data.get('category', '')}",
             f"물품명: {data.get('name', '')}",
@@ -603,8 +603,10 @@ def format_order_message(requester_id: str, data: dict,
         lines.append(f"주문자: <@{requester_id}>")
     else:
         is_public_etc = data.get("usage") == "공용" and data.get("category") == "기타"
-        lines = [
-            "[공용물품 등록]" if is_public_etc else "[물품등록]",
+        lines = []
+        if is_public_etc:
+            lines.append("[공용물품]")
+        lines += [
             f"물품용도: {data.get('usage', '')}",
             f"주문장소: {data.get('location', '')}",
         ]
