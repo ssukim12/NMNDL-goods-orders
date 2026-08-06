@@ -27,7 +27,10 @@ load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 app = App(token=os.environ.get("SLACK_BOT_TOKEN"))
 
-LAB_MANAGER_ID = os.environ.get("LAB_MANAGER_ID", "")
+LAB_MANAGER_IDS = [
+    uid.strip() for uid in os.environ.get("LAB_MANAGER_ID", "").split(",")
+    if uid.strip()
+]
 ORDER_CHANNEL  = os.environ.get("CHANNEL_ID", "")
 
 # ── Google Sheets 연동 초기화 ─────────────────────────────────────────────────
@@ -143,8 +146,10 @@ PUBLIC_CATEGORIES = list(PUBLIC_GOODS.keys()) + ["기타"]
 
 # ── 헬퍼 ──────────────────────────────────────────────────────────────────────
 
-def get_dm_channel(client, user_id: str) -> str:
-    resp = client.conversations_open(users=user_id)
+def get_dm_channel(client, user_ids) -> str:
+    if isinstance(user_ids, str):
+        user_ids = [user_ids]
+    resp = client.conversations_open(users=",".join(user_ids))
     return resp["channel"]["id"]
 
 
@@ -736,7 +741,7 @@ def handle_order_modal(ack, body, client, view):
     else:
         payload = json.dumps({"requester_id": requester_id, "data": data},
                              ensure_ascii=False)
-        dm_channel = get_dm_channel(client, LAB_MANAGER_ID)
+        dm_channel = get_dm_channel(client, LAB_MANAGER_IDS)
         preview = format_order_message(requester_id, data)
 
         client.chat_postMessage(
@@ -812,7 +817,7 @@ def _validate_order(data: dict) -> dict:
 def handle_approval(ack, body, client):
     ack()
 
-    if body["user"]["id"] != LAB_MANAGER_ID:
+    if body["user"]["id"] not in LAB_MANAGER_IDS:
         client.chat_postEphemeral(
             channel=body["channel"]["id"], user=body["user"]["id"],
             text="권한이 없습니다.")
@@ -843,7 +848,7 @@ def handle_approval(ack, body, client):
 def handle_denial(ack, body, client):
     ack()
 
-    if body["user"]["id"] != LAB_MANAGER_ID:
+    if body["user"]["id"] not in LAB_MANAGER_IDS:
         client.chat_postEphemeral(
             channel=body["channel"]["id"], user=body["user"]["id"],
             text="권한이 없습니다.")
@@ -972,7 +977,7 @@ def handle_delete_order(ack, body, client):
     requester_id = payload["requester_id"]
     clicker_id = body["user"]["id"]
 
-    if clicker_id != requester_id and clicker_id != LAB_MANAGER_ID:
+    if clicker_id != requester_id and clicker_id not in LAB_MANAGER_IDS:
         client.chat_postEphemeral(
             channel=body["channel"]["id"], user=clicker_id,
             text="🚫 이 요청을 삭제할 권한이 없습니다. (주문자 및 랩장 전용)")
