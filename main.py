@@ -40,6 +40,12 @@ USAGE_TO_SHEET = {
     "공용 (랩장 별도 허가 필요)": "05_공용 시약/물품/가스 지출 현황",
 }
 
+# B열부터 입력하는 탭 (그 외 탭은 C열부터 입력)
+SHEETS_STARTING_AT_B = {
+    "02_개인 시약/물품/가스 지출 현황",
+    "05_공용 시약/물품/가스 지출 현황",
+}
+
 def _init_spreadsheet():
     sheet_id = os.environ.get("ADMIN_SHEET_ID")
     if not sheet_id:
@@ -178,24 +184,28 @@ def append_to_sheet(client, requester_id: str, data: dict) -> None:
             total = ""
 
         requester_name = _get_requester_name(client, requester_id)
-        next_row = len(ws.col_values(5)) + 1  # E열(물품명) 기준
+
+        start_col = 2 if sheet_name in SHEETS_STARTING_AT_B else 3  # B열 또는 C열
+        name_col = start_col + 2  # 물품명 열 (구분, 구매 날짜 다음)
+        next_row = len(ws.col_values(name_col)) + 1
+        start_col_letter = chr(ord("A") + start_col - 1)
 
         row = [
-            "물품",                       # C: 구분
-            date.today().isoformat(),    # D: 구매 날짜
-            data.get("name", ""),        # E: 물품명
-            requester_name,              # F: 이름
-            company,                     # G: 거래처
-            quantity,                    # H: 수량
-            data.get("unit", ""),        # I: 단위
-            data.get("spec", ""),        # J: 용량 및 규격
-            data.get("cas_cat", ""),     # K: CAS/Cat. No.
-            price,                       # L: 날개별 금액
-            total,                       # M: 청구 금액
-            data.get("purpose", ""),     # N: 구매 목적
-            "",                          # O: 기타
+            "물품",                       # 구분
+            date.today().isoformat(),    # 구매 날짜
+            data.get("name", ""),        # 물품명
+            requester_name,              # 이름
+            company,                     # 거래처
+            quantity,                    # 수량
+            data.get("unit", ""),        # 단위
+            data.get("spec", ""),        # 용량 및 규격
+            data.get("cas_cat", ""),     # CAS/Cat. No.
+            price,                       # 낱개별 금액
+            total,                       # 청구 금액
+            data.get("purpose", ""),     # 구매 목적
+            "",                          # 기타
         ]
-        ws.update(f"C{next_row}", [row], value_input_option="RAW")
+        ws.update(f"{start_col_letter}{next_row}", [row], value_input_option="RAW")
         print(f"[Sheets] 기록 완료: {data.get('name', '')} → {sheet_name} (행 {next_row})")
     except Exception as e:
         print(f"[Sheets] 기록 실패: {e}")
