@@ -178,24 +178,24 @@ def append_to_sheet(client, requester_id: str, data: dict) -> None:
             total = ""
 
         requester_name = _get_requester_name(client, requester_id)
-        next_row = len(ws.col_values(4)) + 1  # D열(물품명) 기준
+        next_row = len(ws.col_values(5)) + 1  # E열(물품명) 기준
 
         row = [
-            "물품",                       # B: 구분
-            date.today().isoformat(),    # C: 구매 날짜
-            data.get("name", ""),        # D: 물품명
-            requester_name,              # E: 이름
-            company,                     # F: 거래처
-            quantity,                    # G: 수량
-            data.get("unit", ""),        # H: 단위
-            data.get("spec", ""),        # I: 용량 및 규격
-            data.get("cas_cat", ""),     # J: CAS/Cat. No.
-            price,                       # K: 날개별 금액
-            total,                       # L: 청구 금액
-            data.get("purpose", ""),     # M: 구매 목적
-            "",                          # N: 기타
+            "물품",                       # C: 구분
+            date.today().isoformat(),    # D: 구매 날짜
+            data.get("name", ""),        # E: 물품명
+            requester_name,              # F: 이름
+            company,                     # G: 거래처
+            quantity,                    # H: 수량
+            data.get("unit", ""),        # I: 단위
+            data.get("spec", ""),        # J: 용량 및 규격
+            data.get("cas_cat", ""),     # K: CAS/Cat. No.
+            price,                       # L: 날개별 금액
+            total,                       # M: 청구 금액
+            data.get("purpose", ""),     # N: 구매 목적
+            "",                          # O: 기타
         ]
-        ws.update(f"B{next_row}", [row], value_input_option="RAW")
+        ws.update(f"C{next_row}", [row], value_input_option="RAW")
         print(f"[Sheets] 기록 완료: {data.get('name', '')} → {sheet_name} (행 {next_row})")
     except Exception as e:
         print(f"[Sheets] 기록 실패: {e}")
