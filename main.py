@@ -205,6 +205,8 @@ def append_to_sheet(client, requester_id: str, data: dict) -> None:
             data.get("purpose", ""),     # 구매 목적
             "",                          # 기타
         ]
+        if sheet_name == "02_개인 시약/물품/가스 지출 현황":
+            row.insert(4, "")  # 이름과 거래처 사이 한 칸(F열) 비움 → 거래처부터 G열
         ws.update(f"{start_col_letter}{next_row}", [row], value_input_option="RAW")
         print(f"[Sheets] 기록 완료: {data.get('name', '')} → {sheet_name} (행 {next_row})")
     except Exception as e:
