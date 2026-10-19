@@ -8,8 +8,7 @@ NMNDL 물품 구매 승인 봇 (모달 폼 버전)
     1. /물품주문 → 간소화 모달 (분류·물품명·수량) → 승인 없이 바로 채널 게시
 
 권한 제어:
-  수정: 주문자 본인만 가능
-  삭제: 주문자 본인 또는 랩장
+  수정·삭제: 주문자 본인 또는 관리자(ORDER_ADMIN_IDS: 랩장, U088W83AZC6)
 """
 
 import json
@@ -29,6 +28,9 @@ app = App(token=os.environ.get("SLACK_BOT_TOKEN"))
 
 LAB_MANAGER_ID = os.environ.get("LAB_MANAGER_ID", "")
 ORDER_CHANNEL  = os.environ.get("CHANNEL_ID", "")
+
+# 주문 메시지 수정·삭제 권한자 (주문자 본인 외)
+ORDER_ADMIN_IDS = {"U04MG6PFR34", "U088W83AZC6"} | ({LAB_MANAGER_ID} if LAB_MANAGER_ID else set())
 
 # ── Google Sheets 연동 초기화 ─────────────────────────────────────────────────
 _logger = logging.getLogger(__name__)
@@ -919,7 +921,7 @@ def handle_denial_modal(ack, client, view):
               f"*거절 사유:* {reason}"))
 
 
-# ── 수정 버튼 → 모달 오픈 (주문자 전용) ──────────────────────────────────────
+# ── 수정 버튼 → 모달 오픈 (주문자·관리자 전용) ───────────────────────────────
 
 @app.action("edit_order")
 def handle_edit_order(ack, body, client):
@@ -929,10 +931,10 @@ def handle_edit_order(ack, body, client):
     requester_id = payload["requester_id"]
     data = payload["data"]
 
-    if body["user"]["id"] != requester_id:
+    if body["user"]["id"] != requester_id and body["user"]["id"] not in ORDER_ADMIN_IDS:
         client.chat_postEphemeral(
             channel=body["channel"]["id"], user=body["user"]["id"],
-            text="🚫 본인이 작성한 주문 요청만 수정할 수 있습니다.")
+            text="🚫 이 요청을 수정할 권한이 없습니다. (주문자 및 관리자 전용)")
         return
 
     metadata = json.dumps({
@@ -974,7 +976,7 @@ def handle_edit_modal(ack, body, client, view):
         blocks=order_channel_blocks(requester_id, data, edited=True))
 
 
-# ── 삭제 버튼 (주문자·랩장 전용) ─────────────────────────────────────────────
+# ── 삭제 버튼 (주문자·관리자 전용) ───────────────────────────────────────────
 
 @app.action("delete_order")
 def handle_delete_order(ack, body, client):
@@ -984,10 +986,10 @@ def handle_delete_order(ack, body, client):
     requester_id = payload["requester_id"]
     clicker_id = body["user"]["id"]
 
-    if clicker_id != requester_id and clicker_id != LAB_MANAGER_ID:
+    if clicker_id != requester_id and clicker_id not in ORDER_ADMIN_IDS:
         client.chat_postEphemeral(
             channel=body["channel"]["id"], user=clicker_id,
-            text="🚫 이 요청을 삭제할 권한이 없습니다. (주문자 및 랩장 전용)")
+            text="🚫 이 요청을 삭제할 권한이 없습니다. (주문자 및 관리자 전용)")
         return
 
     client.chat_delete(
